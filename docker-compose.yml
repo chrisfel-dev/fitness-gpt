@@ -1,0 +1,50 @@
+version: '3'
+services:
+  strapi:
+    container_name: fitness-gpt
+    build:
+      context: .
+      dockerfile: ./Dockerfile.local
+    #image: strapi
+    restart: unless-stopped
+    #env_file: .env
+    environment:
+      DB_NAME: fitnessdb
+      DB_ENGINE: postgres
+      DB_PORT: 5432
+      DB_HOST: fitnessdb
+      NODE_ENV: development
+
+    volumes:
+      - ./:/app/
+    ports:
+      - '3000:3000'
+    networks:
+      - fitness-gpt
+    depends_on:
+      - fitnessdb
+
+  fitnessdb:
+    container_name: fitnessdb
+    platform: linux/amd64 #for platform error on Apple M1 chips
+    restart: unless-stopped
+    #env_file: .env
+    image: postgres:12.0-alpine
+    environment:
+      PGUSER: ${DATABASE_USERNAME}
+      PGDATABASE: ${DATABASE_PASSWORD}
+    volumes:
+      #- fitness-data:/var/lib/postgresql/data/ #using a volume
+      - ./data:/var/lib/postgresql/data/ # if you want to use a bind folder
+    ports:
+      - '5432:5432'
+    networks:
+      - fitness-gpt
+
+volumes:
+  fitness-data:
+
+networks:
+  fitness-gpt:
+    name: FitnessGPT
+    driver: bridge
