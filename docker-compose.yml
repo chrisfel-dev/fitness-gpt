@@ -1,28 +1,21 @@
 version: '3'
 services:
-  strapi:
-    container_name: fitness-gpt
+  app:
+    platform: "linux/amd64"
     build:
       context: .
-      dockerfile: ./Dockerfile.local
-    #image: strapi
-    restart: unless-stopped
-    #env_file: .env
-    environment:
-      DB_NAME: fitnessdb
-      DB_ENGINE: postgres
-      DB_PORT: 5432
-      DB_HOST: fitnessdb
-      NODE_ENV: development
-
-    volumes:
-      - ./:/app/
+      dockerfile: Dockerfile.local
+      args:
+        NEXT_PUBLIC_CLIENTVAR: "clientvar"
+    working_dir: /app
     ports:
-      - '3000:3000'
+      - "3000:3000"
+    image: t3-app
+    env_file: .env
     networks:
       - fitness-gpt
-    depends_on:
-      - fitnessdb
+    volumes:
+      - ${PWD}:/app
 
   fitnessdb:
     container_name: fitnessdb

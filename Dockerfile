@@ -1,41 +1,52 @@
-# Stage 1: Build the app
-FROM registry.access.redhat.com/ubi8/nodejs-18 AS build
+##### DEPENDENCIES
 
-USER root
-# Set the working directory
+FROM --platform=linux/amd64 node:16-alpine3.17 AS deps
+RUN apk add --no-cache libc6-compat openssl1.1-compat
 WORKDIR /app
-RUN chown -R 1001:1001 /app
-USER 1001
 
-# Copy package.json and package-lock.json to the working directory
-COPY package*.json ./
+# Install Prisma Client - remove if not using Prisma
 
-# Install dependencies
-RUN npm ci
+COPY prisma ./
 
-# Copy the rest of the application code
+# Install dependencies based on the preferred package manager
+
+COPY package.json yarn.lock* package-lock.json* pnpm-lock.yaml\* ./
+
+RUN yarn global add pnpm && pnpm i
+
+##### BUILDER
+
+FROM --platform=linux/amd64 node:16-alpine3.17 AS builder
+ARG DATABASE_URL
+ARG NEXT_PUBLIC_CLIENTVAR
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Build the app
-RUN npm run build
+# ENV NEXT_TELEMETRY_DISABLED 1
 
-# Stage 2: Create a lightweight image to run the app
-FROM registry.access.redhat.com/ubi8/nodejs-18 AS production
+RUN yarn global add pnpm && SKIP_ENV_VALIDATION=1 pnpm run build; 
+##### RUNNER
 
-USER root
-# Set the working directory
+FROM --platform=linux/amd64 node:16-alpine3.17 AS runner
 WORKDIR /app
-RUN chown -R 1001:1001 /app
-USER 1001
 
-# Copy the built app from the previous stage
-COPY --from=build /app/.next ./.next
-COPY --from=build /app/public ./public
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/package.json ./
+ENV NODE_ENV production
 
-# Expose the desired port
+# ENV NEXT_TELEMETRY_DISABLED 1
+
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+
+COPY --from=builder /app/next.config.mjs ./
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/package.json ./package.json
+
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+USER nextjs
 EXPOSE 3000
+ENV PORT 3000
 
-# Start the app
-CMD ["npm", "start"]
+CMD ["node", "server.js"]
